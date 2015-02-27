@@ -1,31 +1,42 @@
 #!/bin/bash
 
-ROOTDIR="/Users/administrator/Desktop"
-LOCKFILE=$ROOTDIR/vconvert.lock
-SETTINGS="blahblahblah"
+# convert any video file to h264 96k AAC
+# use tmp for lock file so it automatically clears on system restart
 
-# check if system just restarted to clear lock files
+LOCKFILE=/tmp/vconvert.lock
+ROOTDIR="/Users/administrator/Desktop/convert"
+LOGFILE=$ROOTDIR/vconvert.log
+SETTINGS="-c:v h264 -acodec libfdk_aac -b:a 96k -y"
 
-# check if script is still running before proceeding
+# check if script is already running before proceeding
 if [ -e $LOCKFILE ]; then
-	echo "Script already running.  Terminating."
-	#exit
+        date >> $LOGFILE
+        echo "Script already running.  Terminating.  Delete $LOCKFILE if you think this is wrong" >> $LOGFILE
+        exit
 else
-	touch $LOCKFILE
+        touch $LOCKFILE
 fi
 
-# iterate through all files, ignoring hidden files
-for FILE in $(find $ROOTDIR -type f -maxdepth 1); do
-	# check if file is writable to determine if it is finished copying if [ -w file ]; then
-	echo "Checking if $FILE is being accessed"
-	lsof $FILE
-	if [ $? == 0 ]; then
-		echo "$FILE is being accessed.  Skipping."
-	else
-		echo "$FILE ready for conversion. Execute $SETTINGS"
-		echo "Cleaning up"
-		# make sure you overwrite in case the system crashed and a lock was cleared on reboot
-		# move converted and source files
-		# delete lock file
-	fi
+# check if output directory alredy exists
+if [ ! -e $ROOTDIR/converted ]; then
+	mkdir $ROOTDIR/converted
+fi
+
+# run through all files, ignore subdirs
+for FILE in $(find $ROOTDIR -maxdepth 1 -type f); do
+        # check if file is being accessed currently and if error code 0, skip it
+        date >> $LOGFILE
+        echo "Checking if $FILE is being accessed" >> $LOGFILE
+        lsof $FILE
+        if [ $? == 0 ]; then
+                echo "$FILE is being accessed.  Skipping." >> $LOGFILE
+        else
+                echo "$FILE ready for conversion using $SETTINGS" >> $LOGFILE
+                FILE_NO_EXTENSION=$(echo $FILE | cut -f1 -d.)
+                ffmpeg -i $FILE $SETTINGS $ROOTDIR/converted/$FILE_NO_EXTENSION.mp4
+        fi
 done
+
+# delete lock file
+echo "Cleaning up" >> $LOGFILE
+rm $LOCKFILE
